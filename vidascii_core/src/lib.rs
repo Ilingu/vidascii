@@ -1,12 +1,10 @@
 mod tests;
 
-use std::{path::Path, thread};
+use std::{fs, path::Path, thread};
 
 use image::{io::Reader as ImageReader, GenericImageView, ImageFormat};
 use std::io::Cursor;
 use vid2img::FileSource;
-
-const HIGH_RES_CHARS: &str = "⠀⡀⡁⡂⡃⡄⡅⡆⡇⡈⡉⡊⡋⡌⡍⡎⡏";
 
 #[derive(Debug)]
 pub enum CoreError {
@@ -19,16 +17,6 @@ pub enum CoreError {
     FrameDecodeError,
     FailedToConvertToBraille,
 }
-
-// 255 67
-// 124
-
-/* --> Sum of 2**digit == offset
-0 3
-1 4
-2 5
-6 7
-*/
 
 pub fn video_to_ascii(file_path: &Path) -> Result<(), CoreError> {
     if !file_path.exists() {
@@ -64,7 +52,7 @@ pub fn video_to_ascii(file_path: &Path) -> Result<(), CoreError> {
 }
 
 /// `ratio` is an integer greater than 1 that can be describred by this sentences: "1 pixel on the braille image equals <ratio> pixels on the original image"
-fn image_to_ascii(image_bytes: &[u8], ratio: u32) -> Result<(), CoreError> {
+pub fn image_to_ascii(image_bytes: &[u8], ratio: u32) -> Result<(), CoreError> {
     let mut img_config = ImageReader::new(Cursor::new(image_bytes));
     img_config.set_format(ImageFormat::Png);
 
@@ -78,37 +66,89 @@ fn image_to_ascii(image_bytes: &[u8], ratio: u32) -> Result<(), CoreError> {
     );
 
     let mut new_img_avg_pixels = vec![
-        vec![vec![vec![0_u16; 4]; 2]; width_chars_count as usize];
+        vec![vec![vec![256_u16; 4]; 2]; width_chars_count as usize];
         height_chars_count as usize
     ];
     for (x, y, rgb) in img.pixels() {
-        let brightness = rgb.0[0..=2].iter().fold(0_u16, |acc, pv| acc + *pv as u16) / 3;
-        let (char_x, char_y) = (
-            ((x * width_chars_count) as f64 / img.width() as f64).round() as usize,
-            ((y * height_chars_count) as f64 / img.height() as f64).round() as usize,
-        );
+        if rgb[3] < 128 {
+            continue;
+        }
+
+        let brightness = (rgb[0] as u16 + rgb[1] as u16 + rgb[2] as u16) / 3;
+        let (char_x, char_y) = ((x / (2 * ratio)) as usize, (y / (4 * ratio)) as usize);
         let (inner_x, inner_y) = ((x % 2) as usize, (y % 4) as usize);
 
-        // do avg
-        new_img_avg_pixels[char_y][char_x][inner_x][inner_y] =
-            (new_img_avg_pixels[char_y][char_x][inner_x][inner_y] + brightness) / 2;
+        // do avg of avg
+        let new_pixel = &mut new_img_avg_pixels[char_y][char_x][inner_x][inner_y];
+        *new_pixel = match *new_pixel == 256 {
+            true => brightness,
+            false => (*new_pixel + brightness) / 2,
+        };
     }
 
-    // to parallel
-    // let new_img_braille_pixels = new_img_avg_pixels
-    //     .iter()
-    //     .map(|raw| raw.iter().map(|p| p.iter().enumerate().filter(|(x, s)| {})));
+    const DOTS_POS: [(usize, usize, u8); 8] = [
+        (0, 0, 0),
+        (0, 1, 1),
+        (0, 2, 2),
+        (0, 3, 6),
+        (1, 0, 3),
+        (1, 1, 4),
+        (1, 2, 5),
+        (1, 3, 7),
+    ];
+
+    let braille_pixels = new_img_avg_pixels
+        .iter()
+        .map(|raw| {
+            raw.iter()
+                .map(|p| {
+                    let mut dots = vec![];
+                    for (x, y, dot) in DOTS_POS {
+                        let avg_brightness = p[x][y];
+                        if avg_brightness == 256 {
+                            continue;
+                        }
+                        if avg_brightness >= 128 {
+                            dots.push(dot)
+                        }
+                    }
+
+                    to_braille(&dots)
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let img_text = braille_pixels_to_string(braille_pixels);
+    fs::write("./out/result.txt", img_text).unwrap();
+
     Ok(())
 }
 
-fn to_braille(dots: &[u8]) -> Result<char, CoreError> {
-    let offset = dots.iter().try_fold(0_u32, |acc, &dot| {
-        if dot > 7 {
-            return Err(CoreError::FailedToConvertToBraille);
-        }
+fn braille_pixels_to_string(braille_pixels: Vec<Vec<char>>) -> String {
+    let lines = braille_pixels.join(&'\n');
 
+    let mut img_text = String::new();
+    img_text.extend(lines.iter());
+
+    img_text
+}
+
+/* --> Sum of 2**digit == offset
+0 3
+1 4
+2 5
+6 7
+*/
+
+fn to_braille(dots: &[u8]) -> Result<char, CoreError> {
+    let offset = dots.iter().fold(0_u32, |acc, &dot| {
         let all_combination = 2_u32.pow(dot as u32);
-        Ok(acc + all_combination)
-    })?;
+        acc + all_combination
+    });
+
+    if offset > 255 {
+        return Err(CoreError::FailedToConvertToBraille);
+    }
     char::from_u32(0x2800 + offset).ok_or(CoreError::FailedToConvertToBraille)
 }
