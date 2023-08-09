@@ -8,3 +8,7 @@ edition = "2021"
 [dependencies]
 image = "0.24.6"
 vid2img = "0.1.1"
+headless_chrome = {git = "https://github.com/rust-headless-chrome/rust-headless-chrome", features = ["fetch"]}
+uuid = { version = "1.4.1", features = ["v4", "fast-rng"] }
+scopeguard = "1.2.0"
+home = "0.5.5"

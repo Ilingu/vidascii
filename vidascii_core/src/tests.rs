@@ -1,8 +1,19 @@
 #[cfg(test)]
 mod core_tests {
-    use std::time::Instant;
+    use std::{
+        error::Error,
+        fs::{self, OpenOptions},
+        io::Write,
+        path::Path,
+        process::Command,
+        time::Instant,
+    };
 
-    use crate::to_braille;
+    use headless_chrome::{protocol::cdp::Page, Browser};
+    use scopeguard::defer;
+    use uuid::Uuid;
+
+    use crate::utils::to_braille;
 
     #[test]
     fn braille_pixels_to_string_bench_test() {
@@ -99,5 +110,75 @@ mod core_tests {
 
         println!("{avg_elapsed}ms");
         assert!(avg_elapsed < 1000)
+    }
+
+    #[test]
+    fn braille_text_to_img_bench_test() {
+        const HTML_TEMPLATE: &str = r#"<!DOCTYPE html><html><body>{%bt}</body></html>"#;
+
+        fn braille_text_to_img_js(braille_text: String) -> Result<Vec<u8>, Box<dyn Error>> {
+            let html_braille = HTML_TEMPLATE.replacen("{%bt}", &braille_text, 1);
+
+            let browser = Browser::default()?;
+            let tab = browser.new_tab()?;
+            tab.evaluate(
+                &format!(
+                    r#"(()=>{{
+            document.head = 
+            document.body = 
+        }})()"#
+                ),
+                false,
+            )?;
+
+            let png_data = tab
+                .wait_for_element("body")?
+                .capture_screenshot(Page::CaptureScreenshotFormatOption::Png)?;
+            Ok(png_data)
+        }
+        fn braille_text_to_img_file(braille_text: String) -> Result<Vec<u8>, Box<dyn Error>> {
+            let file_id = Uuid::new_v4().to_string();
+            let file_path = format!("../tmp/{file_id}.html");
+
+            let mut file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(&file_path)?;
+
+            let html_braille = HTML_TEMPLATE.replacen("{%bt}", &braille_text, 1);
+            file.write_all(html_braille.as_bytes())?;
+
+            defer! {
+               let _ = fs::remove_file(&file_path);
+            };
+
+            // load html page
+            let full_path = Path::new(&file_path).canonicalize()?;
+            let file_uri = format!("file://{}", full_path.to_str().ok_or("")?);
+
+            let browser = Browser::default()?;
+            let tab = browser.new_tab()?;
+            tab.navigate_to(&file_uri)?;
+
+            let png_data = tab
+                .wait_for_element("body")?
+                .capture_screenshot(Page::CaptureScreenshotFormatOption::Png)?;
+            Ok(png_data)
+        }
+
+        // benchmark
+        let avg_file_elapsed = (0..5).fold(0_u128, |acc, _| {
+            let now = Instant::now();
+            braille_text_to_img_file("sasaki and miyano".to_string()).unwrap();
+            acc + now.elapsed().as_millis()
+        }) / 5;
+        let avg_js_elapsed = (0..5).fold(0_u128, |acc, _| {
+            let now = Instant::now();
+            braille_text_to_img_js("sasaki and miyano".to_string()).unwrap();
+            acc + now.elapsed().as_millis()
+        }) / 5;
+
+        println!("avg_file_elapsed - {avg_file_elapsed}ms");
+        println!("avg_js_elapsed - {avg_js_elapsed}ms");
     }
 }
