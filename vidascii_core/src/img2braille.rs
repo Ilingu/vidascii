@@ -1,10 +1,8 @@
+use braille2img::braille2img;
 use image::{io::Reader as ImageReader, GenericImageView};
-use std::{fs, io::Cursor};
+use std::io::Cursor;
 
-use crate::{
-    utils::{braille_pixels_to_string, braille_text_to_img, to_braille},
-    CoreError,
-};
+use crate::CoreError;
 
 const DOTS_POS: [(usize, usize, u8); 8] = [
     (0, 0, 0),
@@ -78,11 +76,36 @@ pub fn image_to_braille(image_bytes: &[u8], ratio: u32) -> Result<Vec<u8>, CoreE
         .collect::<Result<Vec<_>, _>>()?;
 
     let braille_text = braille_pixels_to_string(braille_pixels);
-    fs::write("./out/result.txt", braille_text.clone()).unwrap();
-    let braille_img = braille_text_to_img(braille_text).map_err(|e| {
-        eprintln!("{e}");
-        CoreError::FailedToConvertToImage
-    })?;
+    let braille_img_datas =
+        braille2img(&braille_text, None).map_err(|_| CoreError::FailedToConvertToImage)?;
 
-    Ok(braille_img)
+    Ok(braille_img_datas)
+}
+
+fn braille_pixels_to_string(braille_pixels: Vec<Vec<char>>) -> String {
+    let lines = braille_pixels.join(&'\n');
+
+    let mut img_text = String::new();
+    img_text.extend(lines.iter());
+
+    img_text
+}
+
+fn to_braille(dots: &[u8]) -> Result<char, CoreError> {
+    /* --> Sum of 2**digit == offset
+    0 3
+    1 4
+    2 5
+    6 7
+    */
+
+    let offset = dots.iter().fold(0_u32, |acc, &dot| {
+        let all_combination = 2_u32.pow(dot as u32);
+        acc + all_combination
+    });
+
+    if offset > 255 {
+        return Err(CoreError::FailedToConvertToBraille);
+    }
+    char::from_u32(0x2800 + offset).ok_or(CoreError::FailedToConvertToBraille)
 }

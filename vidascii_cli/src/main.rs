@@ -6,9 +6,9 @@ use std::{
 use vidascii_core::img2braille::image_to_braille;
 
 fn main() {
-    let image_bytes = fs::read("./assets/GIVENNNNNNNNN.png").unwrap();
+    let image_bytes = fs::read("./assets/2t.jpg").unwrap();
 
-    let result_img = image_to_braille(&image_bytes, 4).unwrap();
+    let result_img = image_to_braille(&image_bytes, 1).unwrap();
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
