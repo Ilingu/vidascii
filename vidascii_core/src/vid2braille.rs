@@ -18,11 +18,6 @@ fn extract_frame(file_path: &Path) -> Result<Vec<Vec<u8>>, CoreError> {
         return Err(CoreError::NotAFile);
     }
 
-    // let extension = file_path.extension().ok_or(CoreError::WrongExtension)?;
-    // if extension != "mp4" {
-    //     return Err(CoreError::WrongExtension);
-    // }
-
     let app_path = open_app_path()?;
     defer! {
         let _ = fs::remove_dir_all(&app_path);
