@@ -2,7 +2,7 @@ mod dithering;
 
 use braille2img::braille2img;
 use image::{io::Reader as ImageReader, GenericImageView, Rgba};
-use std::{fs, io::Cursor};
+use std::io::Cursor;
 
 use crate::CoreError;
 
@@ -22,7 +22,7 @@ const DOTS_POS: [(usize, usize, u8); 8] = [
 /// `ratio` is an integer greater than 1 that can be describred by this sentences: "1 pixel on the braille image equals <ratio> pixels on the original image"
 pub fn image_to_braille(
     image_bytes: &[u8],
-    ratio: f64,
+    ratio: f32,
     dithering: bool,
 ) -> Result<Vec<u8>, CoreError> {
     // decode img
@@ -34,13 +34,12 @@ pub fn image_to_braille(
 
     if dithering {
         FloydSteinbergDithering::apply_to(&mut img).map_err(|_| CoreError::DitheringFailed)?;
-        img.save("./out/dithering.png").unwrap();
     }
 
     // compute new img width/height
     let (width_chars_count, height_chars_count) = (
-        (img.width() as f64 / (ratio * 2.0)).ceil() as u32,
-        (img.height() as f64 / (ratio * 4.0)).ceil() as u32,
+        (img.width() as f32 / (ratio * 2.0)).ceil() as u32,
+        (img.height() as f32 / (ratio * 4.0)).ceil() as u32,
     );
 
     // compute each new pixels brightness
@@ -87,12 +86,12 @@ pub fn image_to_braille(
 
             let brightness = compute_brightness([r, g, b], GrayScaleMode::Average);
             let (char_x, char_y) = (
-                (x as f64 / (2.0 * ratio)) as usize,
-                (y as f64 / (4.0 * ratio)) as usize,
+                (x as f32 / (2.0 * ratio)) as usize,
+                (y as f32 / (4.0 * ratio)) as usize,
             );
             let (inner_x, inner_y) = (
-                ((x as f64 / ratio) % 2.0) as usize,
-                ((y as f64 / ratio) % 4.0) as usize,
+                ((x as f32 / ratio) % 2.0) as usize,
+                ((y as f32 / ratio) % 4.0) as usize,
             );
 
             // do avg of avg
@@ -128,7 +127,6 @@ pub fn image_to_braille(
         .collect::<Result<Vec<_>, _>>()?;
 
     let braille_text = braille_pixels_to_string(braille_pixels);
-    fs::write("./out/result.txt", &braille_text).unwrap();
     let braille_img_datas =
         braille2img(&braille_text, None).map_err(|_| CoreError::FailedToConvertToImage)?;
 
@@ -159,13 +157,6 @@ fn braille_pixels_to_string(braille_pixels: Vec<Vec<char>>) -> String {
 }
 
 fn to_braille(dots: &[u8]) -> Result<char, CoreError> {
-    /* --> Sum of 2**digit == offset
-    0 3
-    1 4
-    2 5
-    6 7
-    */
-
     let offset = dots.iter().fold(0_u32, |acc, &dot| {
         let all_combination = 2_u32.pow(dot as u32);
         acc + all_combination

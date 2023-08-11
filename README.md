@@ -2,3 +2,7 @@ https://en.wikipedia.org/wiki/Braille#Unicode <=> https://www.ssec.wisc.edu/~tom
 https://en.wikipedia.org/wiki/Floyd%E2%80%93Steinberg_dithering
 https://505e06b2.github.io/Image-to-Braille/
 https://duckduckgo.com/?q=rust+collection+of+images+to+video&ia=web
+
+```bash
+sudo apt install ffmpeg
+```
