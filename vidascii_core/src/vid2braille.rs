@@ -26,7 +26,9 @@ pub fn video_to_braille(file_path: &Path) -> Result<(), CoreError> {
                 .map_err(|_| CoreError::StreamError)?
                 .ok_or(CoreError::StreamNotFound)?;
 
-            convert_tasks.push(thread::spawn(move || image_to_braille(&png_img_data, 100)));
+            convert_tasks.push(thread::spawn(move || {
+                image_to_braille(&png_img_data, 2.0, false)
+            }));
         }
     }
 

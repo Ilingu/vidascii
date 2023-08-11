@@ -13,4 +13,5 @@ pub enum CoreError {
     FrameDecodeError,
     FailedToConvertToBraille,
     FailedToConvertToImage,
+    DitheringFailed,
 }

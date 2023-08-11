@@ -1,9 +1,12 @@
 pub mod config;
 
-use std::{error::Error, io::Cursor};
+use std::error::Error;
 
 use config::Braille2ImgOptions;
-use image::{ImageBuffer, Rgb, RgbImage};
+use image::{
+    codecs::png::{CompressionType, FilterType, PngEncoder},
+    ImageBuffer, Rgb, RgbImage,
+};
 use rusttype::{Font, Scale};
 
 pub fn braille2img(
@@ -45,7 +48,7 @@ pub fn braille2img(
             &mut image,
             text_color,
             0,
-            (line_id as u32 * options.char_height).try_into()?,
+            (line_id as u32 * options.char_height) as i32,
             Scale::uniform(font_size),
             &font,
             line,
@@ -54,10 +57,13 @@ pub fn braille2img(
 
     // output the image datas
     let mut img_bytes: Vec<u8> = Vec::new();
-    image.write_to(
-        &mut Cursor::new(&mut img_bytes),
-        image::ImageOutputFormat::Png,
-    )?;
+    let encoder =
+        PngEncoder::new_with_quality(&mut img_bytes, CompressionType::Best, FilterType::NoFilter);
+    image.write_with_encoder(encoder)?;
+
+    /* Better png optimizer but overkill in this situation, so I removed it
+    let optimized_img_bytes = oxipng::optimize_from_memory(&img_bytes, &oxipng::Options::from_preset(2))?;
+    */
 
     Ok(img_bytes)
 }
