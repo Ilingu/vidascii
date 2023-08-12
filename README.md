@@ -2,6 +2,10 @@
 
 #### ➡ converts image or video to braille art 🪄
 
+
+https://github.com/Ilingu/vidascii/assets/57411599/6212b74a-71cc-4727-86da-f2d63db94ff4
+
+
 ## Origin
 
 I was watching an anime, and in the comment section I saw yet another guy who posted a braille image.
