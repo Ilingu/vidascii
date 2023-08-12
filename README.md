@@ -8,7 +8,7 @@ For exemple this gif...
 
 ...will be converted to:
 
-https://github.com/Ilingu/vidascii/assets/57411599/6212b74a-71cc-4727-86da-f2d63db94ff4
+https://github.com/Ilingu/vidascii/assets/57411599/fc663575-e432-4ff7-a36e-4bac9ec74470
 
 ## Origin
 
