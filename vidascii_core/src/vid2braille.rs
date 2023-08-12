@@ -2,10 +2,10 @@ use std::{
     fs::{self, OpenOptions},
     io::Write,
     path::Path,
-    process::Command,
     thread,
 };
 
+use ffmpeg_sidecar::command::FfmpegCommand;
 use scopeguard::defer;
 
 use crate::{img2braille::image_to_braille, utils::open_app_path, CoreError};
@@ -27,25 +27,43 @@ fn extract_frame(file_path: &Path) -> Result<Vec<Vec<u8>>, CoreError> {
         .canonicalize()
         .map_err(|_| CoreError::FileNotFound)?;
 
-    Command::new("ffmpeg")
-        .args([
-            "-i",
-            &full_path.display().to_string(),
-            "-vf",
-            "fps=12",
-            &format!("{app_path}/out%d.png"),
-        ])
-        .output()
-        .map_err(|_| CoreError::StreamError)?;
-
-    let mut i = 1;
-    let mut frames = vec![];
-    while let Ok(img_data) = fs::read(format!("{app_path}/out{}.png", i)) {
-        i += 1;
-        frames.push(img_data);
+    // decoce video into streams of png frames
+    let decoding = FfmpegCommand::new()
+        .input(&full_path.display().to_string())
+        .args(["-vf", "fps=12"])
+        .output(&format!("{app_path}/out%d.png"))
+        .spawn()
+        .map_err(|_| CoreError::VideoDecodingError)?
+        .wait()
+        .map_err(|_| CoreError::VideoDecodingError)?;
+    if !decoding.success() {
+        return Err(CoreError::VideoDecodingError);
     }
 
-    if frames.is_empty() {
+    // get number of frames
+    let frame_count = fs::read_dir(&app_path)
+        .map_err(|_| CoreError::StreamNotFound)?
+        .try_fold(0_usize, |acc, entry| -> Result<usize, ()> {
+            let entry = entry.map_err(|_| ())?;
+            let filetype = entry.file_type().map_err(|_| ())?;
+
+            let filename_os = entry.file_name();
+            let filename = filename_os.to_str().ok_or(())?;
+
+            Ok(if filetype.is_file() && filename.ends_with(".png") {
+                acc + 1
+            } else {
+                acc
+            })
+        })
+        .map_err(|_| CoreError::StreamNotFound)?;
+
+    // retreive the png frames
+    let frames = (1..=frame_count)
+        .map(|i| fs::read(format!("{app_path}/out{}.png", i)))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| CoreError::StreamNotFound)?;
+    if frames.len() != frame_count {
         return Err(CoreError::StreamNotFound);
     }
 
@@ -62,29 +80,30 @@ pub fn video_to_braille(
         return Err(CoreError::OutputNotFound);
     }
 
+    // fetch ffmpeg lib if not installed in user machine
+    ffmpeg_sidecar::download::auto_download().map_err(|_| CoreError::FFmpegAutoDownloadFailed)?;
+
     let app_path = open_app_path()?;
     defer! {
         let _ = fs::remove_dir_all(&app_path);
     }
 
-    let mut convert_tasks = vec![];
     // Decode video to frames
-    {
-        for (file_id, png_frame_data) in extract_frame(file_path)?.into_iter().enumerate() {
-            let app_path_copy = app_path.clone();
-            convert_tasks.push(thread::spawn(move || {
-                let img_datas = image_to_braille(&png_frame_data, ratio, dithering)?;
+    let mut convert_tasks = vec![];
+    for (file_id, png_frame_data) in extract_frame(file_path)?.into_iter().enumerate() {
+        let app_path_copy = app_path.clone();
+        convert_tasks.push(thread::spawn(move || {
+            let img_datas = image_to_braille(&png_frame_data, ratio, dithering)?;
 
-                let mut file = OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .open(format!("{app_path_copy}/{file_id}.png"))
-                    .map_err(|_| CoreError::FailedToSave)?;
-                file.write_all(&img_datas)
-                    .map_err(|_| CoreError::FailedToSave)?;
-                Ok(())
-            }));
-        }
+            let mut file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(format!("{app_path_copy}/{file_id}.png"))
+                .map_err(|_| CoreError::FailedToSave)?;
+            file.write_all(&img_datas)
+                .map_err(|_| CoreError::FailedToSave)?;
+            Ok(())
+        }));
     }
 
     // wait for all frames to be converted
@@ -93,20 +112,18 @@ pub fn video_to_braille(
     }
 
     // re encode to video
-    Command::new("ffmpeg")
-        .args([
-            "-framerate",
-            "12",
-            "-pattern_type",
-            "glob",
-            "-i",
-            &format!("{app_path}/*.png"),
-            "-c:v",
-            "libx264",
-            &format!("{}/output.mp4", out_path.display()),
-        ])
-        .output()
+    let encoding = FfmpegCommand::new()
+        .args(["-framerate", "12", "-pattern_type", "glob"])
+        .input(&format!("{app_path}/*.png"))
+        .codec_video("libx264")
+        .output(&format!("{}/output.mp4", out_path.display()))
+        .spawn()
+        .map_err(|_| CoreError::VideoEncodingError)?
+        .wait()
         .map_err(|_| CoreError::VideoEncodingError)?;
+    if !encoding.success() {
+        return Err(CoreError::VideoEncodingError);
+    }
 
     Ok(())
 }

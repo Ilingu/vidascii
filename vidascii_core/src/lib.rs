@@ -19,7 +19,9 @@ pub enum CoreError {
     FailedToOpenAppPath,
     FailedToSave,
     FFmpegInitFailed,
+    FFmpegAutoDownloadFailed,
     FailedToGetVidInfo,
     OutputNotFound,
     VideoEncodingError,
+    VideoDecodingError,
 }

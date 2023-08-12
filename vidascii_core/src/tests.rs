@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod core_tests {
-    use std::time::Instant;
+    use std::{fs, thread, time::Instant};
 
     #[test]
     fn braille_pixels_to_string_bench_test() {
@@ -112,5 +112,161 @@ mod core_tests {
     }
 
     #[test]
-    fn braille_text_to_img_bench_test() {}
+    fn get_frame_count_bench_test() {
+        const REAL_FRAME_COUNT: usize = 2001;
+        const APP_PATH: &str = "/tmp/vidascii_tmp/tests";
+
+        fn concise() -> usize {
+            fs::read_dir(APP_PATH)
+                .unwrap()
+                .try_fold(0_usize, |acc, entry| -> Result<usize, ()> {
+                    let entry = entry.map_err(|_| ())?;
+                    let filetype = entry.file_type().map_err(|_| ())?;
+
+                    let filename_os = entry.file_name();
+                    let filename = filename_os.to_str().ok_or(())?;
+
+                    Ok(if filetype.is_file() && filename.ends_with(".png") {
+                        acc + 1
+                    } else {
+                        acc
+                    })
+                })
+                .unwrap()
+        }
+
+        fn flatmapped() -> usize {
+            fs::read_dir(APP_PATH)
+                .unwrap()
+                .filter_map(|entry| entry.ok())
+                .filter_map(|entry| {
+                    let (filename, filetype) = (
+                        entry.file_name().to_str().map(|s| s.to_string()),
+                        entry.file_type().ok(),
+                    );
+                    match (filename, filetype) {
+                        (Some(filename), Some(filetype)) => Some((filename, filetype)),
+                        _ => None,
+                    }
+                })
+                .fold(0_usize, |acc, (filename, filetype)| {
+                    if filetype.is_file() && filename.ends_with(".png") {
+                        acc + 1
+                    } else {
+                        acc
+                    }
+                })
+        }
+
+        let avg_concise_elapsed = (0..10).fold(0_u128, |acc, _| {
+            let now = Instant::now();
+            for _ in 0..1_000 {
+                let count = concise();
+                assert_eq!(count, REAL_FRAME_COUNT);
+            }
+            acc + now.elapsed().as_millis()
+        }) / 10;
+        let avg_flatmapped_elapsed = (0..10).fold(0_u128, |acc, _| {
+            let now = Instant::now();
+            for _ in 0..1_000 {
+                let count = flatmapped();
+                assert_eq!(count, REAL_FRAME_COUNT);
+            }
+            acc + now.elapsed().as_millis()
+        }) / 10;
+
+        println!("avg_concise_elapsed - {avg_concise_elapsed}ms");
+        println!("avg_flatmapped_elapsed - {avg_flatmapped_elapsed}ms");
+    }
+
+    #[test]
+    fn extract_frames_bench_test() {
+        const REAL_FRAME_COUNT: usize = 2001;
+        const APP_PATH: &str = "/tmp/vidascii_tmp/tests";
+        let frame_count = fs::read_dir(APP_PATH)
+            .unwrap()
+            .try_fold(0_usize, |acc, entry| -> Result<usize, ()> {
+                let entry = entry.map_err(|_| ())?;
+                let filetype = entry.file_type().map_err(|_| ())?;
+
+                let filename_os = entry.file_name();
+                let filename = filename_os.to_str().ok_or(())?;
+
+                Ok(if filetype.is_file() && filename.ends_with(".png") {
+                    acc + 1
+                } else {
+                    acc
+                })
+            })
+            .unwrap();
+        assert_eq!(frame_count, REAL_FRAME_COUNT);
+
+        fn single_threaded_while(frame_count: usize) {
+            let mut i = 1;
+            let mut frames = vec![];
+            while let Ok(img_data) = fs::read(format!("{APP_PATH}/{}.png", i)) {
+                i += 1;
+                frames.push(img_data);
+            }
+            if frames.len() != frame_count {
+                panic!("frames.len() != frame_count")
+            }
+        }
+
+        fn single_threaded_map(frame_count: usize) {
+            let frames = (1..=frame_count)
+                .map(|i| fs::read(format!("{APP_PATH}/{}.png", i)))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            if frames.len() != frame_count {
+                panic!("frames.len() != frame_count")
+            }
+        }
+
+        fn parallel(frame_count: usize) {
+            // retreive the png frames
+            let mut frames_task = vec![];
+            for fid in 1..=frame_count {
+                frames_task.push(thread::spawn(move || {
+                    fs::read(format!("{APP_PATH}/{}.png", fid))
+                }));
+            }
+
+            let mut frames = vec![];
+            for task in frames_task {
+                let frame_data = task.join().unwrap().unwrap();
+                frames.push(frame_data);
+            }
+
+            if frames.len() != frame_count {
+                panic!("frames.len() != frame_count")
+            }
+        }
+
+        let avg_parallel_elapsed = (0..10).fold(0_u128, |acc, _| {
+            let now = Instant::now();
+            for _ in 0..10 {
+                parallel(frame_count);
+            }
+            acc + now.elapsed().as_millis()
+        }) / 10;
+        let avg_single_threaded_map_elapsed = (0..10).fold(0_u128, |acc, _| {
+            let now = Instant::now();
+            for _ in 0..10 {
+                single_threaded_map(frame_count);
+            }
+            acc + now.elapsed().as_millis()
+        }) / 10;
+        let avg_single_threaded_while_elapsed = (0..10).fold(0_u128, |acc, _| {
+            let now = Instant::now();
+            for _ in 0..10 {
+                single_threaded_while(frame_count);
+            }
+            acc + now.elapsed().as_millis()
+        }) / 10;
+
+        println!("avg_single_threaded_map_elapsed - {avg_single_threaded_map_elapsed}ms");
+        println!("avg_single_threaded_while_elapsed - {avg_single_threaded_while_elapsed}ms");
+        println!("avg_parallel_elapsed - {avg_parallel_elapsed}ms");
+    }
 }

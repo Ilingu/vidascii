@@ -10,3 +10,4 @@ image = "0.24.6"
 braille2img = { path="../braille2img" }
 uuid = { version = "1.4.1", features = ["v4", "fast-rng"] }
 scopeguard = "1.2.0"
+ffmpeg-sidecar = "0.4.1"
