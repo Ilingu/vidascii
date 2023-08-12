@@ -13,7 +13,7 @@ use console::{console_log, Level};
 use indicatif::{ProgressBar, ProgressStyle};
 use vidascii_core::{img2braille, vid2braille};
 
-/// A simple *image/video* to braille *image/video* art converter 📹
+/// A simple *image/video* to braille *image/video* art converter 📼
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -21,15 +21,18 @@ struct Args {
     #[arg(short, long)]
     input: String,
 
-    /// Path to the output **directory**
+    /// Path to the output **directory** 📂
     #[arg(short, long)]
     output: String,
 
     /// The 'ratio' is the amount of braille characters dots per pixel.
     /// For exemple:
+    ///
     /// - `-ratio=1.0` mean that, one braille dot = one pixel, in other words each pixel is conserved on the ouput,
     /// original image quality is conserved
+    ///
     /// - `-ratio=2.0` mean that, one braille dot = 4 pixels, so there is a data lost, output image quality will be degraded
+    ///
     /// - in general: `-ratio=n` with n >= 1.0; mean that, one braille dot = 4**(n-1) pixels.
     ///
     /// You can specified a ratio between 0 and 1, this will expand the output image,

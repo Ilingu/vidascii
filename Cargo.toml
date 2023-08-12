@@ -1,3 +1,2 @@
 [workspace]
-
 members = ["vidascii_core", "vidascii_cli"]
