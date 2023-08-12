@@ -9,7 +9,7 @@ use image::{
 };
 use rusttype::{Font, Scale};
 
-pub fn braille2img(
+pub fn braille_to_image(
     text: &str,
     options: Option<Braille2ImgOptions>,
 ) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -38,7 +38,7 @@ pub fn braille2img(
 
     // Set font
     let font_size = options.font_size;
-    let font_data: &[u8] = include_bytes!("../fonts/Braille.ttf");
+    let font_data: &[u8] = include_bytes!("../../fonts/Braille.ttf");
     let font: Font<'static> =
         Font::try_from_bytes(font_data).ok_or("Failed to load braille font")?;
 

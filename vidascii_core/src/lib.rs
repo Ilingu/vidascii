@@ -1,3 +1,4 @@
+mod braille2img;
 pub mod img2braille;
 mod tests;
 mod utils;
@@ -15,12 +16,9 @@ pub enum CoreError {
     FailedToConvertToBraille,
     FailedToConvertToImage,
     DitheringFailed,
-    FailedToGetHomeDir,
     FailedToOpenAppPath,
     FailedToSave,
-    FFmpegInitFailed,
     FFmpegAutoDownloadFailed,
-    FailedToGetVidInfo,
     OutputNotFound,
     VideoEncodingError,
     VideoDecodingError,

@@ -2,6 +2,7 @@ const BASE_FONT_SIZE: f32 = 20.0; // 20px
 const BASE_CHAR_WIDTH: u32 = 10; // 10px
 const BASE_CHAR_HEIGHT: u32 = 18; // 18px
 
+#[allow(dead_code)]
 pub struct Braille2ImgOptionsBuilder {
     /// rbg value
     background_color: [u8; 3],
@@ -11,6 +12,7 @@ pub struct Braille2ImgOptionsBuilder {
     font_size: f32,
 }
 
+#[allow(dead_code)]
 impl Braille2ImgOptionsBuilder {
     pub fn set_bg_color(mut self, rgb: [u8; 3]) -> Self {
         self.background_color = rgb;
@@ -62,6 +64,7 @@ pub struct Braille2ImgOptions {
     pub char_height: u32,
 }
 
+#[allow(dead_code)]
 impl Braille2ImgOptions {
     pub fn builder() -> Braille2ImgOptionsBuilder {
         Braille2ImgOptionsBuilder::default()

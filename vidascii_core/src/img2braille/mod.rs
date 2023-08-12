@@ -1,10 +1,9 @@
 mod dithering;
 
-use braille2img::braille2img;
 use image::{io::Reader as ImageReader, GenericImageView, Rgba};
 use std::io::Cursor;
 
-use crate::CoreError;
+use crate::{braille2img::braille_to_image, CoreError};
 
 use self::dithering::FloydSteinbergDithering;
 
@@ -24,8 +23,16 @@ pub fn image_to_braille(
     image_bytes: &[u8],
     ratio: f32,
     dithering: bool,
+    set_progress: Option<impl Fn(&'static str, u8)>,
 ) -> Result<Vec<u8>, CoreError> {
+    let report = |msg: &'static str, new_position: u8| {
+        if let Some(ref set_report) = set_progress {
+            set_report(msg, new_position);
+        }
+    };
+
     // decode img
+    report("decoding image...", 0);
     let mut img = ImageReader::new(Cursor::new(image_bytes))
         .with_guessed_format()
         .map_err(|_| CoreError::WrongExtension)?
@@ -33,6 +40,7 @@ pub fn image_to_braille(
         .map_err(|_| CoreError::FrameDecodeError)?;
 
     if dithering {
+        report("applying dithering...", 25);
         FloydSteinbergDithering::apply_to(&mut img).map_err(|_| CoreError::DitheringFailed)?;
     }
 
@@ -45,6 +53,8 @@ pub fn image_to_braille(
     // compute each new pixels brightness
     let mut new_img_avg_pixels =
         vec![vec![[[256_u16; 4]; 2]; width_chars_count as usize]; height_chars_count as usize];
+
+    report("Converting image to braille...", 50);
 
     let sub_divised_by = (1.0 / ratio).round() as u32;
     if sub_divised_by > 1 {
@@ -127,8 +137,12 @@ pub fn image_to_braille(
         .collect::<Result<Vec<_>, _>>()?;
 
     let braille_text = braille_pixels_to_string(braille_pixels);
+
+    report("Converting braille to image...", 75);
     let braille_img_datas =
-        braille2img(&braille_text, None).map_err(|_| CoreError::FailedToConvertToImage)?;
+        braille_to_image(&braille_text, None).map_err(|_| CoreError::FailedToConvertToImage)?;
+
+    report("Image converted", 100);
 
     Ok(braille_img_datas)
 }
